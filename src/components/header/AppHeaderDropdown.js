@@ -38,10 +38,11 @@ const AppHeaderDropdown = () => {
   const [ftpHost, setFtpHost] = useState('')
   const [ftpUser, setFtpUser] = useState('')
   const [ftpPass, setFtpPass] = useState('')
+  const [shopifyShopName, setShopifyShopName] = useState('')
   const [shopifyToken, setShopifyToken] = useState('')
 
   const handleSave = () => {
-    console.log('Saved Credentials:', { ftpHost, ftpUser, ftpPass, shopifyToken })
+    console.log('Saved Credentials:', { ftpHost, ftpUser, ftpPass, shopifyShopName, shopifyToken })
     // TODO: Send this data to your backend API
     setVisible(false)
   }
@@ -129,6 +130,12 @@ const AppHeaderDropdown = () => {
               value={ftpPass}
               onChange={(e) => setFtpPass(e.target.value)}
               className="mb-3"
+            />
+            <CFormInput
+              label="Shopify Shop Name"
+              value={shopifyShopName}
+              onChange={(e) => setShopifyShopName(e.target.value)}
+              className="mb-4"
             />
             <CFormInput
               label="Shopify Token"
