@@ -1,6 +1,9 @@
 import React, { Suspense, useEffect } from 'react'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { useSelector } from 'react-redux'
+import LandingPage from './components/landingPage/LandingPage';
+
+
 
 import { CSpinner, useColorModes } from '@coreui/react'
 import './scss/style.scss'
@@ -45,6 +48,7 @@ const App = () => {
         }
       >
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route exact path="/login" name="Login Page" element={<Login />} />
           <Route exact path="/register" name="Register Page" element={<Register />} />
           <Route exact path="/404" name="Page 404" element={<Page404 />} />
