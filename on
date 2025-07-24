@@ -1,0 +1,33 @@
+warning: in the working copy of '.gitignore', CRLF will be replaced by LF the next time Git touches it
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex e080cd5..ea7f5c7 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -1,25 +1,2 @@[m
+[31m-# See https://help.github.com/ignore-files/ for more about ignoring files.[m
+[31m-[m
+[31m-# dependencies[m
+[31m-/node_modules[m
+[31m-package-lock.json[m
+[31m-yarn.lock[m
+[31m-[m
+[31m-# testing[m
+[31m-/coverage[m
+[31m-[m
+[31m-# production[m
+[31m-/build[m
+[31m-[m
+[31m-# misc[m
+[31m-.eslintcache[m
+[31m-.DS_Store[m
+[31m-.idea[m
+[31m-.env.local[m
+[31m-.env.development.local[m
+[31m-.env.test.local[m
+[31m-.env.production.local[m
+[31m-[m
+[31m-npm-debug.log*[m
+[31m-yarn-debug.log*[m
+[31m-yarn-error.log*[m
+[32m+[m[32mnode_modules/[m[41m [m
+[32m+[m[32m.env[m[41m [m
