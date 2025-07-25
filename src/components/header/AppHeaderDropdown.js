@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import {
   CAvatar,
-  CBadge,
   CDropdown,
   CDropdownDivider,
   CDropdownHeader,
@@ -16,17 +15,7 @@ import {
   CFormInput,
   CButton,
 } from '@coreui/react'
-import {
-  cilBell,
-  cilCreditCard,
-  cilCommentSquare,
-  cilEnvelopeOpen,
-  cilFile,
-  cilLockLocked,
-  cilSettings,
-  cilTask,
-  cilUser,
-} from '@coreui/icons'
+import { cilSettings } from '@coreui/icons'
 import CIcon from '@coreui/icons-react'
 
 import avatar8 from './../../assets/images/avatars/8.jpg'
@@ -34,16 +23,62 @@ import avatar8 from './../../assets/images/avatars/8.jpg'
 const AppHeaderDropdown = () => {
   const [visible, setVisible] = useState(false)
 
-  // State for credentials
+  // Credentials states
   const [ftpHost, setFtpHost] = useState('')
   const [ftpUser, setFtpUser] = useState('')
   const [ftpPass, setFtpPass] = useState('')
   const [shopifyShopName, setShopifyShopName] = useState('')
   const [shopifyToken, setShopifyToken] = useState('')
 
-  const handleSave = () => {
-    console.log('Saved Credentials:', { ftpHost, ftpUser, ftpPass, shopifyShopName, shopifyToken })
-    // TODO: Send this data to your backend API
+  const handleSave = async () => {
+    const ftpData = {
+      ftpHost,
+      ftpUser,
+      ftpPass,
+    }
+
+    try {
+      // 1) Save FTP credentials and download CSV from FTP
+      const ftpResponse = await fetch('http://127.0.0.1:5000/save-credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ftpData),
+      })
+
+      const ftpResult = await ftpResponse.json()
+
+      if (!ftpResponse.ok) {
+        alert('FTP error: ' + (ftpResult.error || 'Unknown error'))
+        return
+      }
+
+      const csvPath = ftpResult.csvPath
+      console.log('CSV downloaded to:', csvPath)
+
+      // 2) Call update inventory with CSV path + Shopify credentials
+      const inventoryResponse = await fetch('http://127.0.0.1:5000/update-inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          csvPath,
+          shopifyShopName,
+          shopifyToken,
+        }),
+      })
+
+      const inventoryResult = await inventoryResponse.json()
+
+      if (!inventoryResponse.ok) {
+        alert('Inventory update failed: ' + (inventoryResult.error || 'Unknown error'))
+        return
+      }
+
+      alert('Inventory updated successfully!')
+      console.log('Shopify Output:', inventoryResult.output)
+    } catch (error) {
+      alert('Network error: ' + error.message)
+    }
+
     setVisible(false)
   }
 
@@ -54,57 +89,15 @@ const AppHeaderDropdown = () => {
           <CAvatar src={avatar8} size="md" />
         </CDropdownToggle>
         <CDropdownMenu className="pt-0" placement="bottom-end">
-          <CDropdownHeader className="bg-body-secondary fw-semibold mb-2">Account</CDropdownHeader>
-          <CDropdownItem href="#">
-            <CIcon icon={cilBell} className="me-2" />
-            Updates
-            <CBadge color="info" className="ms-2">42</CBadge>
-          </CDropdownItem>
-          <CDropdownItem href="#">
-            <CIcon icon={cilEnvelopeOpen} className="me-2" />
-            Messages
-            <CBadge color="success" className="ms-2">42</CBadge>
-          </CDropdownItem>
-          <CDropdownItem href="#">
-            <CIcon icon={cilTask} className="me-2" />
-            Tasks
-            <CBadge color="danger" className="ms-2">42</CBadge>
-          </CDropdownItem>
-          <CDropdownItem href="#">
-            <CIcon icon={cilCommentSquare} className="me-2" />
-            Comments
-            <CBadge color="warning" className="ms-2">42</CBadge>
-          </CDropdownItem>
-          
           <CDropdownHeader className="bg-body-secondary fw-semibold my-2">Settings</CDropdownHeader>
-          <CDropdownItem href="#">
-            <CIcon icon={cilUser} className="me-2" />
-            Profile
-          </CDropdownItem>
-          {/* SETTINGS ITEM OPENS MODAL */}
           <CDropdownItem onClick={() => setVisible(true)}>
             <CIcon icon={cilSettings} className="me-2" />
             Settings
           </CDropdownItem>
-          <CDropdownItem href="#">
-            <CIcon icon={cilCreditCard} className="me-2" />
-            Payments
-            <CBadge color="secondary" className="ms-2">42</CBadge>
-          </CDropdownItem>
-          <CDropdownItem href="#">
-            <CIcon icon={cilFile} className="me-2" />
-            Projects
-            <CBadge color="primary" className="ms-2">42</CBadge>
-          </CDropdownItem>
-          <CDropdownDivider />
-          <CDropdownItem href="#">
-            <CIcon icon={cilLockLocked} className="me-2" />
-            Lock Account
-          </CDropdownItem>
         </CDropdownMenu>
       </CDropdown>
 
-      {/* MODAL FOR CREDENTIALS */}
+      {/* Modal for FTP & Shopify credentials */}
       <CModal visible={visible} onClose={() => setVisible(false)}>
         <CModalHeader>
           <CModalTitle>Enter Credentials</CModalTitle>
@@ -144,7 +137,7 @@ const AppHeaderDropdown = () => {
               className="mb-4"
             />
             <CButton color="primary" onClick={handleSave}>
-              Save
+              Save & Update Inventory
             </CButton>
           </CForm>
         </CModalBody>
