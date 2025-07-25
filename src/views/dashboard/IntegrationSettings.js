@@ -12,7 +12,7 @@ const IntegrationSettings = () => {
   const [message, setMessage] = useState('')
 
   const handleSave = async () => {
-    const res = await fetch('http://localhost:4000/sync', {
+    const res = await fetch('http://localhost:5000/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
