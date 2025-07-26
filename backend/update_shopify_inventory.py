@@ -5,23 +5,38 @@ from collections import defaultdict
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# ✅ Always load the .env from this script's directory
+script_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(script_dir, '.env')
+load_dotenv(dotenv_path=env_path)
 
+print(" Working directory:", os.getcwd())
+print(" .env path:", env_path)
+
+# ✅ Environment variables
 SHOP_NAME = os.getenv('SHOP_NAME')
 ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
 API_VERSION = os.getenv('API_VERSION', '2025-07')
 ACTIVE_LOCATION_ID = int(os.getenv('ACTIVE_LOCATION_ID', '111007859026'))
+CSV_PATH = os.getenv('CSV_PATH', '').strip()
 
+
+# ✅ Debug: Print Access Token (partially)
+print("ACCESS_TOKEN Loaded:", ACCESS_TOKEN[:8] + "..." if ACCESS_TOKEN else "None")
+print("Length of token:", len(ACCESS_TOKEN) if ACCESS_TOKEN else "None")
+
+# ✅ Exit early if missing creds
 if not SHOP_NAME or not ACCESS_TOKEN:
-    print("[ERROR] SHOP_NAME or ACCESS_TOKEN missing in .env file.", file=sys.stderr)
+    print("[❌ ERROR] SHOP_NAME or ACCESS_TOKEN missing in .env file.", file=sys.stderr)
     sys.exit(1)
 
+# ✅ Shopify API setup
 BASE_URL = f"https://{SHOP_NAME}.myshopify.com/admin/api/{API_VERSION}/"
 HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN,
     "Content-Type": "application/json"
 }
+
 
 def shopify_request(method, endpoint, data=None, params=None):
     try:
@@ -38,6 +53,7 @@ def shopify_request(method, endpoint, data=None, params=None):
     except requests.RequestException as e:
         print(f"[ERROR] API request failed: {e}", file=sys.stderr)
         return None
+
 
 def aggregate_quantities(csv_path):
     quantities = defaultdict(int)
@@ -58,18 +74,18 @@ def aggregate_quantities(csv_path):
         print(f"[ERROR] Failed to process CSV: {e}", file=sys.stderr)
         return None
 
+
 def update_inventory(sku_quantities):
     success, errors = 0, 0
 
     for sku, total_qty in sku_quantities.items():
-        print(f"\n🔄 Processing SKU: {sku} (Total Qty: {total_qty})")
+        print(f"\n Processing SKU: {sku} (Total Qty: {total_qty})")
         item_id = None
 
         # Search for variant by SKU
         page = 1
         while True:
             params = {'limit': 250}
-
             response = shopify_request('GET', 'products.json', params=params)
             if not response:
                 break
@@ -111,7 +127,7 @@ def update_inventory(sku_quantities):
 
             result = shopify_request('POST', 'inventory_levels/set.json', data=payload)
             if result:
-                print(f"[✅ SUCCESS] Updated {sku} to {total_qty} at location {loc['location_id']}")
+                print(f"[ SUCCESS] Updated {sku} to {total_qty} at location {loc['location_id']}")
                 success += 1
                 updated = True
             else:
@@ -124,23 +140,28 @@ def update_inventory(sku_quantities):
 
     return success, errors
 
-def main():
-    if len(sys.argv) != 2:
-        print("Usage: python update_shopify_inventory.py <csv_file_path>", file=sys.stderr)
-        return 1
 
-    csv_path = sys.argv[1]
-    print(f"\n📄 Running with CSV path: {csv_path}")
+def main():
+    if len(sys.argv) == 2:
+        csv_path = sys.argv[1]
+    else:
+        csv_path = CSV_PATH
+        if not csv_path:
+            print("Usage: python update_shopify_inventory.py <csv_file_path> or set CSV_PATH in .env", file=sys.stderr)
+            return 1
+
+    print(f"\n Running with CSV path: {csv_path}")
 
     sku_quantities = aggregate_quantities(csv_path)
     if not sku_quantities:
         return 1
 
-    print(f"\n✅ Aggregated {len(sku_quantities)} unique SKUs from CSV")
+    print(f"\n Aggregated {len(sku_quantities)} unique SKUs from CSV")
 
     success, errors = update_inventory(sku_quantities)
-    print(f"\n📦 Final Result: {success} successful updates, {errors} errors")
+    print(f"\n Final Result: {success} successful updates, {errors} errors")
     return 0 if errors == 0 else 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

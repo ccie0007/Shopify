@@ -1,9 +1,15 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import traceback
+import os
+import subprocess
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# Load .env variables at app start
+load_dotenv()
 
 @app.route('/save-credentials', methods=['POST'])
 def save_credentials():
@@ -23,13 +29,18 @@ def save_credentials():
             f.write(f"FTP_PASS={data['ftpPass']}\n")
             f.write(f"SHOP_NAME={data['shopifyShopName']}\n")
             f.write(f"ACCESS_TOKEN={data['shopifyToken']}\n")
+            # Hardcoded CSV path saved here:
+            f.write(r"CSV_PATH=C:\xampp\htdocs\FTPShopify\ShopifyTech\backend\stock_update.csv")
+           
 
-        return jsonify({'message': 'Credentials saved successfully'}), 200
+
+        return jsonify({'message': 'Credentials and CSV path saved successfully'}), 200
 
     except Exception as e:
         print("Exception occurred in /save-credentials:")
         traceback.print_exc()
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
 
 @app.route('/update-inventory', methods=['POST'])
 def update_inventory():
@@ -37,13 +48,37 @@ def update_inventory():
         data = request.json
         print("Received data in /update-inventory:", data)  # Debug log
 
-        # Your inventory update logic here
+        # Load CSV path from env or fallback
+        csv_path = os.getenv('CSV_PATH')
+        if not csv_path:
+            csv_path = r"C:\xampp\htdocs\FTPShopify\ShopifyTech\backend\stock_update.csv"
+        print(f"Using CSV path: {csv_path}")
+
+        # Run the update script via subprocess and capture output
+        result = subprocess.run(
+            ['python', 'update_shopify_inventory.py', csv_path],
+            capture_output=True,
+            text=True,
+            check=False  # We'll handle errors ourselves
+        )
+
+        print("Update script stdout:", result.stdout)
+        print("Update script stderr:", result.stderr)
+
+        if result.returncode != 0:
+            # Script returned error
+            return jsonify({
+                'error': 'Inventory update script failed',
+                'details': result.stderr
+            }), 500
 
         return jsonify({'message': 'Inventory updated successfully'}), 200
+
     except Exception as e:
         print("Exception occurred in /update-inventory:")
         traceback.print_exc()
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -64,6 +99,7 @@ def login():
         print("Exception occurred in /login:")
         traceback.print_exc()
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
