@@ -35,6 +35,8 @@ const AppHeaderDropdown = () => {
       ftpHost,
       ftpUser,
       ftpPass,
+      shopifyShopName,
+      shopifyToken,
     }
 
     try {
