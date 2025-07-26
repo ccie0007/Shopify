@@ -1,0 +1,59 @@
+[33mcommit c0633109e8cf27b8b8116a8fcc20a0a11eef41fc[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: Your Name <ccie0007@hotmail.com>
+Date:   Sat Jul 26 01:15:07 2025 +0100
+
+    ftp/shopify login/credential save works but not updating shopify
+
+[33mcommit 00a0cb11c5ca64059715dd2cf41077a09d36cc93[m
+Author: Your Name <ccie0007@hotmail.com>
+Date:   Fri Jul 25 17:29:47 2025 +0100
+
+    react modal login successl but update not successful yet
+
+[33mcommit 968fa98f0291f9e1d27f999067aa829d38889ba7[m
+Author: Your Name <ccie0007@hotmail.com>
+Date:   Fri Jul 25 15:34:28 2025 +0100
+
+    login to dashboard works
+
+[33mcommit fd9f0f4e7afd692a9f14111d827de1e8bdb1fac1[m
+Author: Your Name <ccie0007@hotmail.com>
+Date:   Thu Jul 24 20:08:57 2025 +0100
+
+    setting opens modal with ftp  & shopify shop name
+
+[33mcommit 8195456b9ae6110058e2833e4fd3b1addf24eff4[m
+Author: Your Name <ccie0007@hotmail.com>
+Date:   Thu Jul 24 19:56:40 2025 +0100
+
+    setting opens modal with ftp  & shopiy but no shop name
+
+[33mcommit 848891c34e722076880e777c8f658c1ca762f32c[m
+Author: Your Name <ccie0007@hotmail.com>
+Date:   Thu Jul 24 18:18:30 2025 +0100
+
+    login opens dashboard sidebar working
+
+[33mcommit 394b49a1d92b7dad6f7b9f0e1e1dbe6563c40630[m
+Author: Your Name <ccie0007@hotmail.com>
+Date:   Thu Jul 24 18:15:29 2025 +0100
+
+    login opens dashboard but sidebar missing
+
+[33mcommit 62da90a7e12b62298ae9c8e43522ac55be021bf2[m
+Author: Your Name <ccie0007@hotmail.com>
+Date:   Thu Jul 24 17:30:46 2025 +0100
+
+    landing page and login works
+
+[33mcommit 28f862c225502201e80192a304cd7e9d4b820aff[m
+Author: Your Name <ccie0007@hotmail.com>
+Date:   Thu Jul 24 16:23:12 2025 +0100
+
+    Your message
+
+[33mcommit cba49c379fb99efe74d631f9149f3d00a004d8af[m
+Author: Your Name <ccie0007@hotmail.com>
+Date:   Thu Jul 24 16:04:40 2025 +0100
+
+    Initial project setup
