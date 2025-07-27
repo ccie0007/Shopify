@@ -4,12 +4,45 @@ import traceback
 import os
 import subprocess
 from dotenv import load_dotenv
+import pyodbc
+
+# SQL Server config
+SQL_SERVER = 'localhost'
+SQL_DATABASE = 'UserAuthDB'
+SQL_USER = 'admin'
+SQL_PASSWORD = '1234'
+SQL_DRIVER = '{ODBC Driver 17 for SQL Server}'
+
+conn_str = f'DRIVER={SQL_DRIVER};SERVER={SQL_SERVER};DATABASE={SQL_DATABASE};UID={SQL_USER};PWD={SQL_PASSWORD}'
+
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
 # Load .env variables at app start
 load_dotenv()
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    try:
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
+
+        conn = pyodbc.connect(conn_str)
+        cursor = conn.cursor()
+        cursor.execute("SELECT password FROM Users WHERE username = ?", (username,))
+        row = cursor.fetchone()
+
+        if row and password == row[0]:  # simple plain-text check
+            return jsonify({'success': True, 'token': 'dummy-token'}), 200
+        else:
+            return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Server error', 'details': str(e)}), 500
 
 @app.route('/save-credentials', methods=['POST'])
 def save_credentials():
@@ -40,6 +73,7 @@ def save_credentials():
         print("Exception occurred in /save-credentials:")
         traceback.print_exc()
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+
 
 
 @app.route('/update-inventory', methods=['POST'])
@@ -79,26 +113,6 @@ def update_inventory():
         traceback.print_exc()
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
-
-@app.route('/login', methods=['POST'])
-def login():
-    try:
-        data = request.json
-        print("Received data in /login:", data)  # Debug log
-
-        username = data.get('username')
-        password = data.get('password')
-
-        # Dummy auth example
-        if username == 'admin' and password == 'password':
-            return jsonify({'message': 'Login successful'}), 200
-        else:
-            return jsonify({'error': 'Invalid credentials'}), 401
-
-    except Exception as e:
-        print("Exception occurred in /login:")
-        traceback.print_exc()
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
 
 if __name__ == '__main__':
