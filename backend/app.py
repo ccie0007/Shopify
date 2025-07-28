@@ -5,6 +5,8 @@ import os
 import subprocess
 from dotenv import load_dotenv
 import pyodbc
+import bcrypt
+
 
 # SQL Server config
 SQL_SERVER = 'localhost'
@@ -35,7 +37,7 @@ def login():
         cursor.execute("SELECT password FROM Users WHERE username = ?", (username,))
         row = cursor.fetchone()
 
-        if row and password == row[0]:  # simple plain-text check
+        if row and bcrypt.checkpw(password.encode('utf-8'), row[0].encode('utf-8')):
             return jsonify({'success': True, 'token': 'dummy-token'}), 200
         else:
             return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
@@ -43,6 +45,7 @@ def login():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': 'Server error', 'details': str(e)}), 500
+
 
 @app.route('/save-credentials', methods=['POST'])
 def save_credentials():
@@ -112,6 +115,42 @@ def update_inventory():
         print("Exception occurred in /update-inventory:")
         traceback.print_exc()
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+    import bcrypt
+
+@app.route('/register', methods=['POST'])
+def register():
+    try:
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
+
+        if not username or not password:
+            return jsonify({'success': False, 'message': 'Username and password required'}), 400
+
+        # Hash the password
+        hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+        conn = pyodbc.connect(conn_str)
+        cursor = conn.cursor()
+
+        # Check if username already exists
+        cursor.execute("SELECT COUNT(*) FROM Users WHERE username = ?", (username,))
+        if cursor.fetchone()[0] > 0:
+            return jsonify({'success': False, 'message': 'Username already taken'}), 409
+
+        # Insert user with hashed password (stored as bytes, convert to string)
+        cursor.execute(
+            "INSERT INTO Users (username, password) VALUES (?, ?)",
+            (username, hashed.decode('utf-8'))
+        )
+        conn.commit()
+
+        return jsonify({'success': True, 'message': 'User registered successfully'}), 201
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': 'Server error', 'details': str(e)}), 500
+
 
 
 
