@@ -1,0 +1,29 @@
+src/
+├── api/                 # (Optional) Backend API calls or helpers
+│
+├── components/          # Reusable UI components (buttons, inputs, SocialLogin, etc.)
+│   └── SocialLogin.js
+│
+├── hooks/               # Custom React hooks (e.g., useAuth.js)
+│   └── useAuth.js
+│
+├── pages/               # Page components (each route/view)
+│   ├── Login.js
+│   ├── Signup.js
+│   ├── ForgotPassword.js
+│   ├── Dashboard.js
+│   └── Home.js           # If you have a landing or main page
+│
+├── layouts/             # Layout components for wrapping pages (e.g., AuthLayout.js)
+│
+├── contexts/            # React Context providers (AuthContext, ThemeContext)
+│
+├── firebase.js          # Firebase setup and config
+│
+├── App.js               # Root component, routing setup
+├── index.js             # ReactDOM render, entry point
+│
+├── styles/              # CSS / SCSS files or global styles
+│   └── LandingPage.css
+│
+└── utils/               # Utility functions/helpers

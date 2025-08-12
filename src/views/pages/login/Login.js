@@ -22,30 +22,34 @@ const Login = ({ onLogin }) => {
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
 
-    try {
-      const res = await fetch('http://127.0.0.1:5000/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      })
+const handleSubmit = async (e) => {
+  e.preventDefault()
+  setError('')
 
-      const data = await res.json()
+  try {
+    const res = await fetch('http://127.0.0.1:5000/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
 
-      if (data.success) {
-        localStorage.setItem('token', data.token)
-        if (onLogin) onLogin(true)
-        navigate('/dashboard') // redirect to dashboard or home page after login
-      } else {
-        setError(data.message)
-      }
-    } catch {
-      setError('Network error')
+    const data = await res.json()
+    console.log("🔍 Login API response:", data)
+
+    if (data.token) {
+      console.log("💾 Saving token to localStorage:", data.token)
+      localStorage.setItem('token', data.token)
+      if (onLogin) onLogin(true)
+      navigate('/dashboard')
+    } else {
+      setError(data.message || 'Login failed')
     }
+  } catch (err) {
+    console.error("❌ Network/login error:", err)
+    setError('Network error')
   }
+}
 
   return (
     <div className="bg-body-tertiary min-vh-100 d-flex flex-row align-items-center">

@@ -1,0 +1,51 @@
+.social-login {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+
+  .btn-google {
+    color: #444 !important; /* darker text by default */
+    background-color: white !important;
+    border: 1px solid #ddd !important;
+    font-weight: 600;
+    transition: color 0.3s ease, background-color 0.3s ease;
+
+    &:hover, &:focus {
+      color: #000 !important; /* darker text on hover */
+      background-color: #f0f0f0 !important; /* subtle background highlight */
+      border-color: #ccc !important;
+    }
+
+    .icon {
+      margin-right: 8px;
+      transition: color 0.3s ease;
+    }
+
+    &:hover .icon, &:focus .icon {
+      color: #db4437 !important; /* Google red icon on hover */
+    }
+  }
+
+  .btn-facebook {
+    color: #444 !important; /* darker text by default */
+    background-color: white !important;
+    border: 1px solid #ddd !important;
+    font-weight: 600;
+    transition: color 0.3s ease, background-color 0.3s ease;
+
+    &:hover, &:focus {
+      color: #000 !important; /* darker text on hover */
+      background-color: #f0f0f0 !important; /* subtle background highlight */
+      border-color: #ccc !important;
+    }
+
+    .icon {
+      margin-right: 8px;
+      transition: color 0.3s ease;
+    }
+
+    &:hover .icon, &:focus .icon {
+      color: #db4437 !important; /* Google red icon on hover */
+    }
+  }
+}
