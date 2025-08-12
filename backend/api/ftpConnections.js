@@ -22,11 +22,11 @@ sql.connect(dbConfig)
     console.error('DB Connection Failed:', err)
   })
 
-// GET all FTP connections for a user
+// GET all FTP connections for authenticated user
 router.get('/', async (req, res) => {
-  const userId = parseInt(req.query.userId, 10)
+  const userId = req.user?.userId
   if (!userId) {
-    return res.status(400).json({ success: false, error: 'Invalid or missing userId' })
+    return res.status(401).json({ success: false, error: 'Unauthorized: Missing userId' })
   }
 
   try {
@@ -40,19 +40,19 @@ router.get('/', async (req, res) => {
   }
 })
 
-// POST new FTP connection
+// POST new FTP connection for authenticated user
 router.post('/', async (req, res) => {
-  console.log('POST /api/ftp-connections body:', req.body);  // <-- Add this
-  const { user_id, name, host, username, password, port } = req.body
+  const userId = req.user?.userId
+  const { name, host, username, password, port } = req.body
 
-  if (!user_id || !name || !host || !username || !password || !port) {
+  if (!userId || !name || !host || !username || !password || !port) {
     return res.status(400).json({ success: false, error: 'Missing required fields' })
   }
 
   try {
     await pool
       .request()
-      .input('user_id', sql.Int, user_id)
+      .input('user_id', sql.Int, userId)
       .input('name', sql.NVarChar(255), name)
       .input('host', sql.NVarChar(255), host)
       .input('username', sql.NVarChar(255), username)
@@ -72,9 +72,10 @@ router.post('/', async (req, res) => {
 // PUT (update FTP connection)
 router.put('/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10)
+  const userId = req.user?.userId
   const { name, host, username, password, port } = req.body
 
-  if (!id || !name || !host || !username || !password || !port) {
+  if (!id || !userId || !name || !host || !username || !password || !port) {
     return res.status(400).json({ success: false, error: 'Missing required fields' })
   }
 
@@ -82,6 +83,7 @@ router.put('/:id', async (req, res) => {
     await pool
       .request()
       .input('id', sql.Int, id)
+      .input('user_id', sql.Int, userId)
       .input('name', sql.NVarChar(255), name)
       .input('host', sql.NVarChar(255), host)
       .input('username', sql.NVarChar(255), username)
@@ -91,7 +93,7 @@ router.put('/:id', async (req, res) => {
         `UPDATE FTPConnections
          SET name = @name, host = @host, username = @username,
              password = @password, port = @port, updated_at = GETDATE()
-         WHERE id = @id`
+         WHERE id = @id AND user_id = @user_id`
       )
 
     res.json({ success: true, message: 'FTP connection updated successfully' })
@@ -103,13 +105,18 @@ router.put('/:id', async (req, res) => {
 // DELETE FTP connection
 router.delete('/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10)
+  const userId = req.user?.userId
 
-  if (!id) {
-    return res.status(400).json({ success: false, error: 'Invalid or missing id' })
+  if (!id || !userId) {
+    return res.status(400).json({ success: false, error: 'Invalid or missing id/userId' })
   }
 
   try {
-    await pool.request().input('id', sql.Int, id).query('DELETE FROM FTPConnections WHERE id = @id')
+    await pool
+      .request()
+      .input('id', sql.Int, id)
+      .input('user_id', sql.Int, userId)
+      .query('DELETE FROM FTPConnections WHERE id = @id AND user_id = @user_id')
     res.json({ success: true, message: 'FTP connection deleted successfully' })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })

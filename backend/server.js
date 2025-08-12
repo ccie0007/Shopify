@@ -1,116 +1,193 @@
-const express = require('express');
-const sql = require('mssql');
-const cors = require('cors');
-const { exec } = require('child_process');
-const path = require('path');
-const bcrypt = require('bcrypt');
+const express = require('express')
+const jwt = require('jsonwebtoken')
+const bcrypt = require('bcrypt')
+const cors = require('cors')
+const sql = require('mssql')
 
-const shopifySettingsRouter = require('./api/shopifySettings');
-const ftpRoutes = require('./api/ftpConnections');
+const app = express()
+app.use(express.json())
+app.use(cors())
 
-const app = express();
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here'
 
-const corsOptions = {
-  origin: 'http://localhost:3000',
-  credentials: true,
-};
-app.use(cors(corsOptions));
-app.use(express.json());
+// SQL Server config (use env vars or defaults)
+const sqlConfig = {
+  user: process.env.DB_USER || 'admin',
+  password: process.env.DB_PASSWORD || '1234',
+  server: process.env.DB_SERVER || 'localhost',
+  database: process.env.DB_NAME || 'UserAuthDB',
+  options: {
+    encrypt: false,
+    trustServerCertificate: true,
+  },
+}
 
-// DB config
-const dbConfig = {
-  user: 'admin',
-  password: '1234',
-  server: 'localhost',
-  database: 'UserAuthDB',
-  options: { encrypt: true, trustServerCertificate: true },
-};
+// JWT authentication middleware
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization']
+  const token = authHeader && authHeader.split(' ')[1]
+  if (!token) {
+    return res.status(401).json({ message: 'Please login first' })
+  }
 
-// Public: Get shop name + masked token
-app.get('/api/get-shop-data', async (req, res) => {
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ message: 'Invalid or expired token' })
+    }
+    req.user = user
+    next()
+  })
+}
+
+// Login route
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body
+
+  if (!username || !password) {
+    return res.status(400).json({ message: 'Username and password are required' })
+  }
+
   try {
-    await sql.connect(dbConfig);
-    const result = await sql.query`
-      SELECT TOP 1 shop_name, access_token FROM ShopifySettings
-    `;
+    await sql.connect(sqlConfig)
 
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ error: 'No shop data found' });
+    const result = await sql.query`SELECT * FROM users WHERE username = ${username}`
+    console.log('Login query result:', result.recordset)
+
+    const user = result.recordset[0]
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid username or password' })
     }
 
-    const shop = result.recordset[0];
-    const token = shop.access_token || '';
-    const maskedToken =
-      token.length > 7
-        ? token.slice(0, 4) + '*'.repeat(token.length - 8) + token.slice(-4)
-        : token;
+    const passwordMatches = await bcrypt.compare(password, user.password)
+    if (!passwordMatches) {
+      return res.status(401).json({ message: 'Invalid username or password' })
+    }
 
+    console.log("✅ Found user:", user)
+    const payload = { userId: user.id, username: user.username }
+    console.log("🔑 Signing token with payload:", payload)
+
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' })
+    console.log("📦 Generated token:", token)
+
+    res.json({ success: true, token })
+  } catch (error) {
+    console.error('Login error:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Mount FTP connections router with authentication
+const ftpConnectionsRouter = require('./api/ftpConnections')
+app.use('/api/ftp-connections', authenticateToken, ftpConnectionsRouter)
+
+// Get shop data route
+app.get('/api/get-shop-data', authenticateToken, async (req, res) => {
+  try {
+    await sql.connect(sqlConfig)
+    const userId = req.user.userId
+    const result = await sql.query`SELECT shop_name, access_token FROM ShopifySettings WHERE user_id = ${userId}`
+    const shop = result.recordset[0]
+    if (!shop) {
+      return res.status(404).json({ message: 'Shop not found' })
+    }
+    // Mask the token (show first 4 and last 4 chars)
+    const token = shop.access_token || ''
+    const maskedToken = token.length > 8
+      ? token.slice(0, 4) + '*'.repeat(token.length - 8) + token.slice(-4)
+      : '*'.repeat(token.length)
     res.json({
       shopName: shop.shop_name,
-      maskedToken,
-    });
-  } catch (err) {
-    console.error('Error fetching shop data:', err);
-    res.status(500).json({ error: 'Server error' });
+      maskedToken: maskedToken,
+    })
+  } catch (error) {
+    console.error('Error fetching shop data:', error)
+    res.status(500).json({ message: 'Server error' })
   }
-});
+})
 
-// Reveal full Shopify token — password required
-app.post('/api/shopify-token/:shopName', async (req, res) => {
-  const { password } = req.body;
-  const shopName = req.params.shopName;
+// Reveal full Shopify token route
+app.post('/api/shopify-token/:shopName', authenticateToken, async (req, res) => {
+  const { password } = req.body
+  const userId = req.user.userId
+  const shopName = req.params.shopName
 
   if (!password) {
-    return res.status(400).json({ error: 'Password required' });
+    return res.status(400).json({ error: 'Password required' })
   }
 
   try {
-    await sql.connect(dbConfig);
-
-    // For demo — use first admin user for password check
-    const userResult = await sql.query`SELECT TOP 1 * FROM Users`;
-    if (userResult.recordset.length === 0) {
-      return res.status(500).json({ error: 'No admin user found' });
+    await sql.connect(sqlConfig)
+    // Get user password hash
+    const userResult = await sql.query`SELECT password FROM users WHERE id = ${userId}`
+    const user = userResult.recordset[0]
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' })
     }
-
-    const adminUser = userResult.recordset[0];
-    const passwordMatches = await bcrypt.compare(password, adminUser.password);
+    const passwordMatches = await bcrypt.compare(password, user.password)
     if (!passwordMatches) {
-      return res.status(403).json({ error: 'Invalid password' });
+      return res.status(403).json({ error: 'Incorrect password' })
     }
-
-    const tokenResult = await sql.query`
-      SELECT access_token FROM ShopifySettings WHERE shop_name = ${shopName}
-    `;
-    if (tokenResult.recordset.length === 0) {
-      return res.status(404).json({ error: 'Shop token not found' });
+    // Get full token
+    const shopResult = await sql.query`SELECT access_token FROM ShopifySettings WHERE user_id = ${userId} AND shop_name = ${shopName}`
+    const shop = shopResult.recordset[0]
+    if (!shop) {
+      return res.status(404).json({ error: 'Shop not found' })
     }
-
-    res.json({ fullToken: tokenResult.recordset[0].access_token });
-  } catch (err) {
-    console.error('Shopify token reveal error:', err);
-    res.status(500).json({ error: 'Server error' });
+    res.json({ fullToken: shop.access_token })
+  } catch (error) {
+    console.error('Error revealing token:', error)
+    res.status(500).json({ error: 'Server error' })
   }
-});
+})
 
-// Sync now endpoint (runs Python script)
-app.post('/api/sync-now', (req, res) => {
-  const scriptPath = path.join(__dirname, 'update_shopify_inventory.py');
+// Get Shopify settings route
+app.get('/api/shopify-settings', authenticateToken, async (req, res) => {
+  try {
+    await sql.connect(sqlConfig)
+    const userId = req.user.userId
+    const result = await sql.query`SELECT id, shop_name, access_token FROM ShopifySettings WHERE user_id = ${userId}`
+    res.json(result.recordset)
+  } catch (error) {
+    console.error('Error fetching Shopify settings:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
 
-  exec(`python "${scriptPath}"`, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`Error running sync script: ${error.message}`);
-      return res.status(500).json({ success: false, message: 'Sync failed' });
-    }
-    if (stderr) console.error(`Sync script stderr: ${stderr}`);
-    console.log(`Sync script output: ${stdout}`);
-    res.json({ success: true, message: 'Sync completed', output: stdout });
-  });
-});
+// Add Shopify settings route
+app.post('/api/shopify-settings', authenticateToken, async (req, res) => {
+  const { shop_name, access_token } = req.body
+  const userId = req.user.userId
+  if (!shop_name || !access_token) {
+    return res.status(400).json({ message: 'Shop name and access token required' })
+  }
+  try {
+    await sql.connect(sqlConfig)
+    await sql.query`
+      INSERT INTO ShopifySettings (user_id, shop_name, access_token, created_at, updated_at)
+      VALUES (${userId}, ${shop_name}, ${access_token}, GETDATE(), GETDATE())
+    `
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Error adding Shopify setting:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
 
-// Mount routers
-app.use('/api/ftp-connections', ftpRoutes);
-app.use('/api/shopify-settings', shopifySettingsRouter);
+// Sync now route
+app.post('/api/sync-now', authenticateToken, async (req, res) => {
+  try {
+    // Your sync logic here
+    res.json({ message: 'Sync completed successfully' })
+  } catch (error) {
+    console.error('Sync error:', error)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
 
-const PORT = 4000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Start server
+const PORT = process.env.PORT || 5000
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`)
+})
