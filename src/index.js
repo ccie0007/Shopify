@@ -6,6 +6,7 @@ import 'core-js';
 import axios from 'axios';
 import App from './App';
 import store from './store';
+import './custom.css';
 
 // Just set axios header if token exists in localStorage
 const token = localStorage.getItem('token');

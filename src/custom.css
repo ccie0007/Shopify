@@ -1,0 +1,123 @@
+/* Strongly target your sidebar with all classes for specificity */
+.sidebar.sidebar-dark.sidebar-fixed.border-end.custom-sidebar {
+  --cui-sidebar-bg: #ffffff !important;
+  background-color: #ffffff !important;
+  color: #ccc !important;
+  border-right: 1px solid #dee2e6 !important; /* Light grey border */
+}
+
+/* Sidebar container */
+.sidebar-nav {
+  background-color: #ffffff; /* Dark grey background */
+  color: #ccc; /* Default text color */
+  height: 100%; /* Ensure it covers full sidebar height */
+}
+
+/* Sidebar links - always visible */
+.sidebar-nav a {
+  color: #333 !important;           /* Dark text for visibility */
+  text-decoration: none;
+  padding: 10px 15px;
+  display: flex;
+  align-items: center;
+  background: none;
+  transition: background 0.2s, color 0.2s;
+}
+
+/* Hover effect for links */
+.sidebar-nav a:hover {
+  color: #333 !important;
+  background-color: #e5e6e8 !important; /* Slightly stronger than #F2F3F3 */
+}
+
+/* Active link styling */
+.sidebar-nav a.active {
+  background-color: #e5e6e8 !important; /* Match hover color */
+  color: #333 !important;
+}
+
+/* Icons inside links - always visible and dark */
+.sidebar-nav a i {
+  color: #333 !important;               /* Match text color */
+  margin-right: 10px;
+}
+
+/* Make sidebar SVG icons always visible and dark */
+.sidebar-nav a .nav-icon,
+.sidebar-nav a svg {
+  color: #333 !important;
+  fill: #333 !important;
+}
+
+/* Remove or comment out these lines to prevent icon color change on hover/active: */
+/*
+.sidebar-nav a.active i {
+  color: #333 !important;
+}
+.sidebar-nav a:hover i {
+  color: #fff !important;
+}
+*/
+
+/* Make all cards and info boxes use the sidebar grey */
+.card,
+.c-card,
+.c-widget,
+.c-callout,
+.c-card-body,
+.c-card-header {
+  background-color: #e5e6e8 !important;
+  border: none !important; /* Optional: remove border for a flat look */
+}
+
+/* Optional: If you want to adjust the footer too */
+.card-footer,
+.c-card-footer {
+  background-color: #e5e6e8 !important;
+  border: none !important;
+}
+
+/* Card header uses sidebar grey */
+.card-header,
+.c-card-header {
+  background-color: #e5e6e8 !important;
+  border: none !important;
+}
+
+/* Card body is white */
+.card-body,
+.c-card-body {
+  background-color: #fff !important;
+  border: none !important;
+}
+
+/* Make card body text dark for visibility on white background */
+.card-body,
+.c-card-body {
+  color: #222 !important;
+}
+
+/* Make form input text dark */
+.card-body input,
+.c-card-body input,
+.card-body label,
+.c-card-body label,
+.card-body .form-label,
+.c-card-body .form-label {
+  color: #222 !important;
+}
+
+/* Set dashboard/main content background to a light grey */
+.wrapper,
+.main,
+body {
+  background-color: #f8f8f9 !important; /* Or #e5e6e8 for a bit stronger */
+}
+
+/* Make card borders visible */
+.card,
+.c-card {
+  border: 1px solid #dee2e6 !important; /* Subtle light grey border */
+  box-shadow: none !important;          /* Optional: remove shadow for a flat look */
+  border-radius: 0 !important;
+}
