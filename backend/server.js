@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken')
 const bcrypt = require('bcrypt')
 const cors = require('cors')
 const sql = require('mssql')
+const path = require('path')
+const { exec } = require('child_process')
 
 const app = express()
 app.use(express.json())
@@ -75,6 +77,32 @@ app.post('/login', async (req, res) => {
   } catch (error) {
     console.error('Login error:', error)
     res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Register route
+app.post('/register', async (req, res) => {
+  const { username, email, password } = req.body
+  if (!username || !email || !password) {
+    return res.status(400).json({ message: 'All fields are required' })
+  }
+  try {
+    await sql.connect(sqlConfig)
+    // Check if username or email already exists
+    const existing = await sql.query`SELECT * FROM users WHERE username = ${username} OR email = ${email}`
+    if (existing.recordset.length > 0) {
+      return res.json({ success: false, message: 'Username or email already exists' })
+    }
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10)
+    await sql.query`
+      INSERT INTO users (username, email, password)
+      VALUES (${username}, ${email}, ${hashedPassword})
+    `
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Registration error:', error)
+    res.status(500).json({ success: false, message: 'Server error' })
   }
 })
 
@@ -176,14 +204,21 @@ app.post('/api/shopify-settings', authenticateToken, async (req, res) => {
 })
 
 // Sync now route
-app.post('/api/sync-now', authenticateToken, async (req, res) => {
-  try {
-    // Your sync logic here
-    res.json({ message: 'Sync completed successfully' })
-  } catch (error) {
-    console.error('Sync error:', error)
-    res.status(500).json({ message: 'Server error' })
-  }
+app.post('/api/sync-now', authenticateToken, (req, res) => {
+  const scriptPath = path.join(__dirname, 'update_shopify_inventory.py')
+  console.log(`[SYNC] Starting inventory sync: ${scriptPath}`)
+
+  exec(`python "${scriptPath}"`, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`[SYNC ERROR] ${error.message}`)
+      return res.status(500).json({ success: false, message: 'Sync failed', error: error.message })
+    }
+    if (stderr) {
+      console.error(`[SYNC STDERR] ${stderr}`)
+    }
+    console.log(`[SYNC OUTPUT]\n${stdout}`)
+    res.json({ success: true, message: 'Sync completed', output: stdout })
+  })
 })
 
 // Start server

@@ -4,6 +4,7 @@ import requests
 from collections import defaultdict
 import os
 from dotenv import load_dotenv
+from ftplib import FTP
 
 # ✅ Always load the .env from this script's directory
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,6 +20,11 @@ ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
 API_VERSION = os.getenv('API_VERSION', '2025-07')
 ACTIVE_LOCATION_ID = int(os.getenv('ACTIVE_LOCATION_ID', '111007859026'))
 CSV_PATH = os.getenv('CSV_PATH', '').strip()
+
+FTP_HOST = os.getenv("FTP_HOST")
+FTP_USER = os.getenv("FTP_USER")
+FTP_PASS = os.getenv("FTP_PASS")
+FTP_CSV_PATH = os.getenv("FTP_CSV_PATH", "/stock_update.csv")
 
 
 # ✅ Debug: Print Access Token (partially)
@@ -141,15 +147,28 @@ def update_inventory(sku_quantities):
     return success, errors
 
 
-def main():
-    if len(sys.argv) == 2:
-        csv_path = sys.argv[1]
-    else:
-        csv_path = CSV_PATH
-        if not csv_path:
-            print("Usage: python update_shopify_inventory.py <csv_file_path> or set CSV_PATH in .env", file=sys.stderr)
-            return 1
+def download_csv_from_ftp():
+    try:
+        with FTP(FTP_HOST) as ftp:
+            ftp.login(user=FTP_USER, passwd=FTP_PASS)
+            local_file = os.path.join(script_dir, 'stock_update.csv')
+            with open(local_file, 'wb') as lf:
+                ftp.retrbinary('RETR ' + FTP_CSV_PATH, lf.write)
+            print(f"[FTP] Downloaded latest CSV to {local_file}")
+            return local_file
+    except Exception as e:
+        print(f"[ERROR] FTP download failed: {e}", file=sys.stderr)
+        return None
 
+
+def main():
+    # Always download the latest CSV from FTP before processing
+    downloaded_csv = download_csv_from_ftp()
+    if not downloaded_csv:
+        print("[❌ ERROR] Could not download CSV from FTP.", file=sys.stderr)
+        return 1
+
+    csv_path = downloaded_csv  # Use the downloaded file!
     print(f"\n Running with CSV path: {csv_path}")
 
     sku_quantities = aggregate_quantities(csv_path)

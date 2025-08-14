@@ -7,68 +7,38 @@ from dotenv import load_dotenv
 import pyodbc
 import bcrypt
 
+load_dotenv()
 
-# SQL Server config
-SQL_SERVER = 'localhost'
-SQL_DATABASE = 'UserAuthDB'
-SQL_USER = 'admin'
-SQL_PASSWORD = '1234'
-SQL_DRIVER = '{ODBC Driver 17 for SQL Server}'
+SQL_SERVER = os.getenv('SQL_SERVER', 'localhost')
+SQL_DATABASE = os.getenv('SQL_DATABASE', 'UserAuthDB')
+SQL_USER = os.getenv('SQL_USER', 'admin')
+SQL_PASSWORD = os.getenv('SQL_PASSWORD', '1234')
+SQL_DRIVER = os.getenv('SQL_DRIVER', '{ODBC Driver 17 for SQL Server}')
 
 conn_str = f'DRIVER={SQL_DRIVER};SERVER={SQL_SERVER};DATABASE={SQL_DATABASE};UID={SQL_USER};PWD={SQL_PASSWORD}'
 
-
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
-
-# Load .env variables at app start
-load_dotenv()
-
-
-@app.route('/login', methods=['POST'])
-def login():
-    try:
-        data = request.json
-        username = data.get('username')
-        password = data.get('password')
-
-        conn = pyodbc.connect(conn_str)
-        cursor = conn.cursor()
-        cursor.execute("SELECT password FROM Users WHERE username = ?", (username,))
-        row = cursor.fetchone()
-
-        if row and bcrypt.checkpw(password.encode('utf-8'), row[0].encode('utf-8')):
-            return jsonify({'success': True, 'token': 'dummy-token'}), 200
-        else:
-            return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'error': 'Server error', 'details': str(e)}), 500
-
+CORS(app)
 
 @app.route('/save-credentials', methods=['POST'])
 def save_credentials():
     try:
         data = request.json
-        print("Received data in /save-credentials:", data)  # Debug log
+        print("Received data in /save-credentials:", data)
 
-        # Validate required fields
         required_fields = ['ftpHost', 'ftpUser', 'ftpPass', 'shopifyShopName', 'shopifyToken']
         missing_fields = [field for field in required_fields if not data.get(field)]
         if missing_fields:
             return jsonify({'error': f"Missing fields: {', '.join(missing_fields)}"}), 400
 
+        csv_path = data.get('csvPath', r"C:\xampp\htdocs\FTPShopify\ShopifyTech\backend\stock_update.csv")
         with open('.env', 'w') as f:
             f.write(f"FTP_HOST={data['ftpHost']}\n")
             f.write(f"FTP_USER={data['ftpUser']}\n")
             f.write(f"FTP_PASS={data['ftpPass']}\n")
             f.write(f"SHOP_NAME={data['shopifyShopName']}\n")
             f.write(f"ACCESS_TOKEN={data['shopifyToken']}\n")
-            # Hardcoded CSV path saved here:
-            f.write(r"CSV_PATH=C:\xampp\htdocs\FTPShopify\ShopifyTech\backend\stock_update.csv")
-           
-
+            f.write(f"CSV_PATH={csv_path}\n")
 
         return jsonify({'message': 'Credentials and CSV path saved successfully'}), 200
 
@@ -77,33 +47,26 @@ def save_credentials():
         traceback.print_exc()
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
 
-
-
 @app.route('/update-inventory', methods=['POST'])
 def update_inventory():
     try:
         data = request.json
-        print("Received data in /update-inventory:", data)  # Debug log
+        print("Received data in /update-inventory:", data)
 
-        # Load CSV path from env or fallback
-        csv_path = os.getenv('CSV_PATH')
-        if not csv_path:
-            csv_path = r"C:\xampp\htdocs\FTPShopify\ShopifyTech\backend\stock_update.csv"
+        csv_path = os.getenv('CSV_PATH', r"C:\xampp\htdocs\FTPShopify\ShopifyTech\backend\stock_update.csv")
         print(f"Using CSV path: {csv_path}")
 
-        # Run the update script via subprocess and capture output
         result = subprocess.run(
-            ['python', 'update_shopify_inventory.py', csv_path],
+            ['python', 'update_shopify_inventory.py'],
             capture_output=True,
             text=True,
-            check=False  # We'll handle errors ourselves
+            check=False
         )
 
         print("Update script stdout:", result.stdout)
         print("Update script stderr:", result.stderr)
 
         if result.returncode != 0:
-            # Script returned error
             return jsonify({
                 'error': 'Inventory update script failed',
                 'details': result.stderr
@@ -115,44 +78,3 @@ def update_inventory():
         print("Exception occurred in /update-inventory:")
         traceback.print_exc()
         return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
-    import bcrypt
-
-@app.route('/register', methods=['POST'])
-def register():
-    try:
-        data = request.json
-        username = data.get('username')
-        password = data.get('password')
-
-        if not username or not password:
-            return jsonify({'success': False, 'message': 'Username and password required'}), 400
-
-        # Hash the password
-        hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-
-        conn = pyodbc.connect(conn_str)
-        cursor = conn.cursor()
-
-        # Check if username already exists
-        cursor.execute("SELECT COUNT(*) FROM Users WHERE username = ?", (username,))
-        if cursor.fetchone()[0] > 0:
-            return jsonify({'success': False, 'message': 'Username already taken'}), 409
-
-        # Insert user with hashed password (stored as bytes, convert to string)
-        cursor.execute(
-            "INSERT INTO Users (username, password) VALUES (?, ?)",
-            (username, hashed.decode('utf-8'))
-        )
-        conn.commit()
-
-        return jsonify({'success': True, 'message': 'User registered successfully'}), 201
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'error': 'Server error', 'details': str(e)}), 500
-
-
-
-
-if __name__ == '__main__':
-    app.run(debug=True)
