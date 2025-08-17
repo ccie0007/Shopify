@@ -5,6 +5,8 @@ const cors = require('cors')
 const sql = require('mssql')
 const path = require('path')
 const { exec } = require('child_process')
+const multer = require('multer')
+const fs = require('fs')
 
 const app = express()
 app.use(express.json())
@@ -204,21 +206,77 @@ app.post('/api/shopify-settings', authenticateToken, async (req, res) => {
 })
 
 // Sync now route
-app.post('/api/sync-now', authenticateToken, (req, res) => {
-  const scriptPath = path.join(__dirname, 'update_shopify_inventory.py')
-  console.log(`[SYNC] Starting inventory sync: ${scriptPath}`)
+app.post('/api/sync-now', authenticateToken, async (req, res) => {
+  try {
+    await sql.connect(sqlConfig)
+    const userId = req.user.userId
+    // Get latest uploaded file for this user
+    const result = await sql.query`
+      SELECT TOP 1 file_path FROM ImportedFiles WHERE user_id = ${userId} ORDER BY uploaded_at DESC
+    `
+    const filePath = result.recordset[0]?.file_path
 
-  exec(`python "${scriptPath}"`, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`[SYNC ERROR] ${error.message}`)
-      return res.status(500).json({ success: false, message: 'Sync failed', error: error.message })
+    console.log('Syncing with file:', filePath);
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'Uploaded file not found.' });
     }
-    if (stderr) {
-      console.error(`[SYNC STDERR] ${stderr}`)
+
+    const scriptPath = path.join(__dirname, 'update_shopify_inventory.py')
+    const env = { ...process.env, CSV_PATH: filePath }
+
+    exec(`python "${scriptPath}"`, { env }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('Python script error:', error, stderr);
+        return res.status(500).json({ success: false, message: 'Sync failed', error: error.message, stderr })
+      }
+      res.json({ success: true, message: 'Sync completed', output: stdout })
+    })
+  } catch (err) {
+    console.error('Server error:', err);
+    res.status(500).json({ success: false, message: 'Server error', error: err.message })
+  }
+})
+
+// File upload route
+const upload = multer({ dest: 'C:/xampp/htdocs/FTPShopify/ShopifyTech/backend/uploads/' })
+app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
+  const userId = req.user.userId
+  const file = req.file
+
+  if (!file) {
+    return res.status(400).json({ message: 'No file uploaded' })
+  }
+
+  // TODO: Process the uploaded file (e.g., parse CSV, update database, etc.)
+
+  res.json({ success: true, message: 'File uploaded successfully', filePath: file.path })
+})
+
+// CSV Import route
+app.post('/api/import-csv', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    const userId = req.user.userId
+    const filePath = req.file?.path
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: No user ID' })
     }
-    console.log(`[SYNC OUTPUT]\n${stdout}`)
-    res.json({ success: true, message: 'Sync completed', output: stdout })
-  })
+    if (!filePath) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' })
+    }
+
+    await sql.connect(sqlConfig)
+    await sql.query`
+      INSERT INTO ImportedFiles (user_id, file_path, uploaded_at)
+      VALUES (${userId}, ${filePath}, GETDATE())
+    `
+
+    res.json({ success: true, message: 'File imported and recorded', filePath })
+  } catch (error) {
+    console.error('Import failed:', error)
+    res.status(500).json({ success: false, message: 'Import failed', error: error.message })
+  }
 })
 
 // Start server

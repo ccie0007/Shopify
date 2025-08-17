@@ -162,13 +162,17 @@ def download_csv_from_ftp():
 
 
 def main():
-    # Always download the latest CSV from FTP before processing
-    downloaded_csv = download_csv_from_ftp()
-    if not downloaded_csv:
-        print("[❌ ERROR] Could not download CSV from FTP.", file=sys.stderr)
-        return 1
+    # Use CSV_PATH from environment if provided (set by backend), otherwise fallback to FTP
+    csv_path = os.getenv('CSV_PATH', '').strip()
+    if csv_path and os.path.isfile(csv_path):
+        print(f"[INFO] Using uploaded CSV: {csv_path}")
+    else:
+        print("[INFO] No uploaded CSV provided, downloading from FTP...")
+        csv_path = download_csv_from_ftp()
+        if not csv_path:
+            print("[❌ ERROR] Could not download CSV from FTP.", file=sys.stderr)
+            return 1
 
-    csv_path = downloaded_csv  # Use the downloaded file!
     print(f"\n Running with CSV path: {csv_path}")
 
     sku_quantities = aggregate_quantities(csv_path)
