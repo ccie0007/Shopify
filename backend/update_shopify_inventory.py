@@ -61,8 +61,8 @@ def shopify_request(method, endpoint, data=None, params=None):
         return None
 
 
-def aggregate_quantities(csv_path):
-    quantities = defaultdict(int)
+def aggregate_quantities_and_prices(csv_path):
+    sku_data = {}
     try:
         with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
@@ -70,23 +70,37 @@ def aggregate_quantities(csv_path):
                 try:
                     sku = row['SKU'].strip()
                     qty = int(row['Quantity'])
-                    quantities[sku] += qty
-                    print(f"[CSV] Read SKU: {sku}, Quantity: {qty}")
+                    price = row.get('Price')
+                    if price is not None and price != '':
+                        price = float(price)
+                    else:
+                        price = None
+                    if sku in sku_data:
+                        sku_data[sku]['quantity'] += qty
+                        # If price is present, overwrite (or keep first, your choice)
+                        if price is not None:
+                            sku_data[sku]['price'] = price
+                    else:
+                        sku_data[sku] = {'quantity': qty, 'price': price}
+                    print(f"[CSV] Read SKU: {sku}, Quantity: {qty}, Price: {price}")
                 except (KeyError, ValueError) as e:
                     print(f"[CSV WARNING] Skipped row due to error: {e}")
                     continue
-        return quantities
+        return sku_data
     except Exception as e:
         print(f"[ERROR] Failed to process CSV: {e}", file=sys.stderr)
         return None
 
 
-def update_inventory(sku_quantities):
+def update_inventory_and_price(sku_data):
     success, errors = 0, 0
 
-    for sku, total_qty in sku_quantities.items():
-        print(f"\n Processing SKU: {sku} (Total Qty: {total_qty})")
+    for sku, data in sku_data.items():
+        total_qty = data['quantity']
+        price = data['price']
+        print(f"\n Processing SKU: {sku} (Total Qty: {total_qty}, Price: {price})")
         item_id = None
+        variant_id = None
 
         # Search for variant by SKU
         page = 1
@@ -100,6 +114,7 @@ def update_inventory(sku_quantities):
                 for variant in product.get('variants', []):
                     if variant.get('sku') == sku:
                         item_id = variant.get('inventory_item_id')
+                        variant_id = variant.get('id')
                         break
                 if item_id:
                     break
@@ -108,12 +123,12 @@ def update_inventory(sku_quantities):
                 break
             page += 1
 
-        if not item_id:
+        if not item_id or not variant_id:
             print(f"[ERROR] SKU not found in Shopify: {sku}")
             errors += 1
             continue
 
-        # Fetch inventory levels
+        # Update inventory
         locations = shopify_request('GET', 'inventory_levels.json', params={'inventory_item_ids': item_id})
         if not locations or not locations.get('inventory_levels'):
             print(f"[ERROR] No inventory locations found for {sku}")
@@ -134,13 +149,29 @@ def update_inventory(sku_quantities):
             result = shopify_request('POST', 'inventory_levels/set.json', data=payload)
             if result:
                 print(f"[ SUCCESS] Updated {sku} to {total_qty} at location {loc['location_id']}")
-                success += 1
                 updated = True
             else:
                 print(f"[ERROR] Failed to update {sku} at location {loc['location_id']}")
                 errors += 1
 
-        if not updated:
+        # Update price if provided
+        if price is not None:
+            price_payload = {
+                "variant": {
+                    "id": variant_id,
+                    "price": price
+                }
+            }
+            price_result = shopify_request('PUT', f'variants/{variant_id}.json', data=price_payload)
+            if price_result:
+                print(f"[ SUCCESS] Updated price for {sku} to {price}")
+            else:
+                print(f"[ERROR] Failed to update price for {sku}")
+                errors += 1
+
+        if updated:
+            success += 1
+        else:
             print(f"[WARNING] SKU {sku} not updated at active location {ACTIVE_LOCATION_ID}")
             errors += 1
 
@@ -161,6 +192,37 @@ def download_csv_from_ftp():
         return None
 
 
+def update_tracking(shop, access_token, order_number, tracking_number, carrier):
+    # 1. Find the order by name (order_number)
+    orders = requests.get(
+        f"https://{shop}/admin/api/2023-10/orders.json?name={order_number}",
+        headers={"X-Shopify-Access-Token": access_token}
+    ).json().get("orders", [])
+    if not orders:
+        print(f"Order {order_number} not found")
+        return
+
+    order_id = orders[0]["id"]
+
+    # 2. Create fulfillment with tracking info
+    payload = {
+        "fulfillment": {
+            "tracking_number": tracking_number,
+            "tracking_company": carrier,
+            "notify_customer": True
+        }
+    }
+    resp = requests.post(
+        f"https://{shop}/admin/api/2023-10/orders/{order_id}/fulfillments.json",
+        json=payload,
+        headers={"X-Shopify-Access-Token": access_token}
+    )
+    if resp.ok:
+        print(f"Tracking updated for order {order_number}")
+    else:
+        print(f"Failed to update tracking for order {order_number}: {resp.text}")
+
+
 def main():
     # Use CSV_PATH from environment if provided (set by backend), otherwise fallback to FTP
     csv_path = os.getenv('CSV_PATH', '').strip()
@@ -175,13 +237,13 @@ def main():
 
     print(f"\n Running with CSV path: {csv_path}")
 
-    sku_quantities = aggregate_quantities(csv_path)
-    if not sku_quantities:
+    sku_data = aggregate_quantities_and_prices(csv_path)
+    if not sku_data:
         return 1
 
-    print(f"\n Aggregated {len(sku_quantities)} unique SKUs from CSV")
+    print(f"\n Aggregated {len(sku_data)} unique SKUs from CSV")
 
-    success, errors = update_inventory(sku_quantities)
+    success, errors = update_inventory_and_price(sku_data)
     print(f"\n Final Result: {success} successful updates, {errors} errors")
     return 0 if errors == 0 else 1
 

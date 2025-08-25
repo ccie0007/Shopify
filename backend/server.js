@@ -8,6 +8,7 @@ const path = require('path')
 const { exec } = require('child_process')
 const multer = require('multer')
 const fs = require('fs')
+const fsp = require('fs').promises
 
 const app = express()
 app.use(express.json())
@@ -236,19 +237,32 @@ app.post('/api/upload', authenticateToken, upload.single('file'), async (req, re
   }
 })
 
+// Example: Update status after sync
 app.post('/api/sync-now', authenticateToken, async (req, res) => {
   try {
+    const { actionId } = req.body
     await sql.connect(sqlConfig)
     const result = await sql.query`
       SELECT TOP 1 file_path FROM ImportedFiles WHERE user_id = ${req.user.userId} ORDER BY uploaded_at DESC
     `
     const filePath = result.recordset[0]?.file_path
-    if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ success: false, message: 'File not found' })
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'File not found' })
+    }
 
     const scriptPath = path.join(__dirname, 'update_shopify_inventory.py')
-    exec(`python "${scriptPath}"`, { env: { ...process.env, CSV_PATH: filePath } }, (err, stdout, stderr) => {
+    exec(`python "${scriptPath}"`, { env: { ...process.env, CSV_PATH: filePath } }, async (err, stdout, stderr) => {
       if (err) return res.status(500).json({ success: false, message: 'Sync failed', error: err.message, stderr })
-      res.json({ success: true, message: 'Sync completed', output: stdout })
+
+      // After successful sync:
+      await sql.query`
+        UPDATE ImportActions
+        SET status = 'completed', lastRunTime = GETDATE(), lastRunStatus = 'Success'
+        WHERE id = ${actionId} AND user_id = ${req.user.userId}
+      `
+      // Delete the file after sync
+    //  await fsp.unlink(filePath)
+      res.json({ success: true, message: 'Update SKUs completed!', output: stdout })
     })
   } catch (err) {
     console.error(err)
@@ -268,12 +282,63 @@ app.post('/api/import-csv', authenticateToken, upload.single('file'), async (req
       INSERT INTO ImportedFiles (user_id, file_path, uploaded_at)
       VALUES (${req.user.userId}, ${req.file.path}, GETDATE())
     `
-    // Optionally: parse/process CSV here
+    // Do NOT delete the file here!
+    // await fsp.unlink(req.file.path)
 
     res.json({ message: 'CSV imported successfully' })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'CSV import failed' })
+  }
+})
+
+// =======================
+// FTP CONNECTIONS (EXAMPLE)
+// =======================
+
+// Get all FTP connections for the logged-in user
+app.get('/api/ftp-connections', authenticateToken, async (req, res) => {
+  try {
+    await sql.connect(sqlConfig)
+    const userId = req.user.userId
+    const result = await sql.query`
+      SELECT id, host, port, username, created_at
+      FROM FTPConnections
+      WHERE user_id = ${userId}
+      ORDER BY id DESC
+    `
+    res.json(result.recordset)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Failed to fetch FTP connections' })
+  }
+})
+
+// =======================
+// IMPORT PRODUCTS FROM CSV
+// =======================
+
+
+app.post('/api/import-products', authenticateToken, async (req, res) => {
+  try {
+    await sql.connect(sqlConfig)
+    const result = await sql.query`
+      SELECT TOP 1 file_path FROM ImportedFiles WHERE user_id = ${req.user.userId} ORDER BY uploaded_at DESC
+    `
+    const filePath = result.recordset[0]?.file_path
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, error: 'File not found' })
+    }
+    const scriptPath = path.join(__dirname, 'create_products_from_csv.py')
+    exec(`python "${scriptPath}" "${filePath}"`, (err, stdout, stderr) => {
+      if (err) {
+        return res.status(500).json({ success: false, error: stderr || err.message })
+      }
+      res.json({ success: true, message: 'Product import completed!', output: stdout })
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ success: false, error: err.message })
   }
 })
 
