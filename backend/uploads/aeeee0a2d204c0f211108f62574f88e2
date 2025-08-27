@@ -1,3 +1,0 @@
-Title,Handle,Body (HTML),Vendor,Type,Tags,Published,Option1 Name,Option1 Value,Variant SKU,Variant Price,Variant Inventory Qty
-Test T-Shirt,test-t-shirt,"<p>This is a test product created via CSV import.</p>",TestVendor,Shirts,"test,import",TRUE,Size,Medium,TEST-SHIRT-M,19.99,50
-Super T-Shirt,super-t-shirt,"<p>This is a test product created via CSV import.</p>",TestVendor,Shirts,"test,import",TRUE,Size,Medium,SUPER-SHIRT-M,19.99,50
