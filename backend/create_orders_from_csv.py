@@ -3,8 +3,11 @@ import requests
 import sys
 import os
 
-SHOP = os.environ.get('SHOP_NAME') or 'techguru2025'
-ACCESS_TOKEN = os.environ.get('SHOPIFY_ACCESS_TOKEN') or os.environ.get('ACCESS_TOKEN')
+SHOP = os.environ.get('SHOP_NAME')
+ACCESS_TOKEN = os.environ.get('SHOPIFY_ACCESS_TOKEN') 
+
+print("SHOP_NAME from env:", SHOP)
+print("SHOPIFY_ACCESS_TOKEN from env:", ACCESS_TOKEN[:6] + "..." if ACCESS_TOKEN else "None")
 
 def create_order(order):
     url = f"https://{SHOP}.myshopify.com/admin/api/2023-10/orders.json"

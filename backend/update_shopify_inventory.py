@@ -16,12 +16,9 @@ FTP_CSV_PATH = os.getenv("FTP_CSV_PATH", "/stock_update.csv")
 LOCAL_CSV_PATH = os.getenv("CSV_PATH", "C:\\xampp\\htdocs\\FTPShopify\\ShopifyTech\\backend\\stock_update.csv")  # Local temp file
 
 # --- SHOPIFY CONFIG ---
-SHOP_NAME = "techguru2025"
-ACCESS_TOKEN = os.getenv("SHOPIFY_ACCESS_TOKEN")
-if not ACCESS_TOKEN:
-    print("[ERROR] SHOPIFY_ACCESS_TOKEN not set in environment.", file=sys.stderr)
-    sys.exit(1)
-API_VERSION = "2025-07"
+SHOP_NAME = os.environ.get('SHOP_NAME')
+ACCESS_TOKEN = os.environ.get('SHOPIFY_ACCESS_TOKEN')
+API_VERSION = os.environ.get('SHOPIFY_API_VERSION', '2024-04')  # Use a stable default
 BASE_URL = f"https://{SHOP_NAME}.myshopify.com/admin/api/{API_VERSION}/"
 HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN,
@@ -83,14 +80,16 @@ def update_inventory(sku_quantities):
         print(f"\nProcessing SKU: {sku} (Total Qty: {total_qty})")
         
         # Get inventory item ID
-        item_ids = []
+        item_id = None
         cursor = None
-        while True:
+        while not item_id:
             endpoint = 'products.json?limit=250' + (f'&page_info={cursor}' if cursor else '')
             data = shopify_request('GET', endpoint)
             if not data:
                 break
-
+                
+            # Collect all inventory_item_ids for this SKU
+            item_ids = []
             for product in data.get('products', []):
                 for variant in product.get('variants', []):
                     if variant.get('sku') == sku:
@@ -101,27 +100,28 @@ def update_inventory(sku_quantities):
             cursor = link.split('page_info=')[1].split('>')[0] if 'rel="next"' in link else None
             if not cursor:
                 break
-
+        
         if not item_ids:
             print(f"[ERROR] SKU not found: {sku}")
             errors += 1
             continue
 
-        # For each matching inventory item, update all locations
+        # For each inventory item, update all locations
         for item_id in item_ids:
             locations = shopify_request('GET', f'inventory_levels.json?inventory_item_ids={item_id}')
             if not locations or not locations.get('inventory_levels'):
-                print(f"[ERROR] No locations found for SKU: {sku}")
+                print(f"[ERROR] No locations found for SKU: {sku} (item_id: {item_id})")
                 errors += 1
                 continue
 
+            # Update each location
             for loc in locations['inventory_levels']:
                 if shopify_request('POST', 'inventory_levels/set.json', {
                     'location_id': loc['location_id'],
                     'inventory_item_id': item_id,
                     'available': total_qty
                 }):
-                    print(f"[SUCCESS] Updated {sku} to {total_qty} at location {loc['location_id']}")
+                    print(f"[SUCCESS] Updated {sku} to {total_qty} at location {loc['location_id']} (item_id: {item_id})")
                     success += 1
                 else:
                     errors += 1
@@ -129,10 +129,12 @@ def update_inventory(sku_quantities):
     return success, errors
 
 def main():
-    csv_path = os.getenv("CSV_PATH")
+    # Prefer command-line argument if provided
+    csv_path = sys.argv[1] if len(sys.argv) > 1 else os.getenv("CSV_PATH")
     if not csv_path or not os.path.exists(csv_path):
         print("[ERROR] No uploaded CSV file found.", file=sys.stderr)
         return 1
+
     print(f"[INFO] Using uploaded CSV: {csv_path}")
 
     # Step 2: Aggregate quantities
@@ -145,11 +147,10 @@ def main():
     print(f"\nFinal Result: {success} successful updates, {errors} errors")
 
     # Optional: Clean up local file
-    # Comment out the next lines if you do not want to delete the source file
-    # try:
-    #     os.remove(csv_path)
-    # except Exception:
-    #     pass
+    try:
+        os.remove(csv_path)
+    except Exception:
+        pass
 
     return 0 if errors == 0 else 1
 

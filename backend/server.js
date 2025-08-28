@@ -1,10 +1,11 @@
 // server.js
+const path = require('path')
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express')
 const jwt = require('jsonwebtoken')
 const bcrypt = require('bcrypt')
 const cors = require('cors')
 const sql = require('mssql')
-const path = require('path')
 const { exec } = require('child_process')
 const multer = require('multer')
 const fs = require('fs')
@@ -37,6 +38,12 @@ function authenticateToken(req, res, next) {
     next()
   })
 }
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`➡️ ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 // =======================
 // AUTH ROUTES
@@ -167,6 +174,9 @@ app.get('/api/import-actions', authenticateToken, async (req, res) => {
 
 // Add a new import action for the logged-in user
 app.post('/api/import-actions', authenticateToken, async (req, res) => {
+  const { name, type } = req.body;
+  if (!name || !type) return res.status(400).json({ error: 'Name and type required' });
+
   try {
     const { name, type } = req.body
     await sql.connect(sqlConfig)
@@ -224,12 +234,11 @@ const upload = multer({ dest: 'uploads/' })
 
 app.post('/api/upload', authenticateToken, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No file uploaded' })
-  const fileType = req.body.fileType || 'product' // or set based on endpoint/context
   try {
     await sql.connect(sqlConfig)
     await sql.query`
-      INSERT INTO ImportedFiles (user_id, file_path, uploaded_at, file_type)
-      VALUES (${req.user.userId}, ${req.file.path}, GETDATE(), ${fileType})
+      INSERT INTO ImportedFiles (user_id, file_path, uploaded_at)
+      VALUES (${req.user.userId}, ${req.file.path}, GETDATE())
     `
     res.json({ success: true, filePath: req.file.path })
   } catch (err) {
@@ -251,20 +260,29 @@ app.post('/api/sync-now', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, message: 'File not found' })
     }
 
-    const scriptPath = path.join(__dirname, '..', '..', 'FTPShopify', 'backend', 'update_shopify_inventory.py')
-    exec(`python "${scriptPath}"`, { env: { ...process.env, CSV_PATH: filePath } }, async (err, stdout, stderr) => {
-      if (err) return res.status(500).json({ success: false, message: 'Sync failed', error: err.message, stderr })
+    const scriptPath = path.join(__dirname, 'update_shopify_inventory.py')
+    exec(
+      `python "${scriptPath}" "${filePath}"`,
+      {
+        env: {
+          ...process.env,
+          CSV_PATH: filePath, // <-- this is important!
+        }
+      },
+      async (err, stdout, stderr) => {
+        if (err) return res.status(500).json({ success: false, message: 'Sync failed', error: err.message, stderr })
 
-      // After successful sync:
-      await sql.query`
-        UPDATE ImportActions
-        SET status = 'completed', lastRunTime = GETDATE(), lastRunStatus = 'Success'
-        WHERE id = ${actionId} AND user_id = ${req.user.userId}
-      `
-      // Delete the file after sync
-    //  await fsp.unlink(filePath)
-      res.json({ success: true, message: 'Update SKUs completed!', output: stdout })
-    })
+        // After successful sync:
+        await sql.query`
+          UPDATE ImportActions
+          SET status = 'completed', lastRunTime = GETDATE(), lastRunStatus = 'Success'
+          WHERE id = ${actionId} AND user_id = ${req.user.userId}
+        `
+        // Delete the file after sync
+      //  await fsp.unlink(filePath)
+        res.json({ success: true, message: 'Update SKUs completed!', output: stdout })
+      }
+    )
   } catch (err) {
     console.error(err)
     res.status(500).json({ success: false, message: 'Server error', error: err.message })
@@ -321,48 +339,76 @@ app.get('/api/ftp-connections', authenticateToken, async (req, res) => {
 
 
 app.post('/api/import-products', authenticateToken, upload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
-  const filePath = req.file.path;
-  const scriptPath = path.join(__dirname, 'create_products_from_csv.py');
-  exec(
-    `python "${scriptPath}" "${path.resolve(filePath)}"`,
-    { env: { ...process.env, SHOPIFY_ACCESS_TOKEN: process.env.SHOPIFY_ACCESS_TOKEN || process.env.ACCESS_TOKEN } },
-    async (err, stdout, stderr) => {
-      if (err) {
-        return res.status(500).json({ success: false, error: stderr || err.message });
-      }
-      // Delete the file after successful import
-      try {
-        await fsp.unlink(filePath);
-      } catch (e) {
-        console.error('Failed to delete file:', filePath, e);
-      }
-      res.json({ success: true, message: 'Product import completed!', output: stdout });
+  let filePath = req.file ? req.file.path : null;
+  try {
+  if (!filePath) {
+      await sql.connect(sqlConfig)
+      const result = await sql.query`
+        SELECT TOP 1 file_path FROM ImportedFiles WHERE user_id = ${req.user.userId} ORDER BY uploaded_at DESC
+      `
+      filePath = result.recordset[0]?.file_path
+  }
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, error: 'File not found' })
     }
-  );
-});
+    const scriptPath = path.join(__dirname, 'create_products_from_csv.py')
+    exec(`python "${scriptPath}" "${filePath}"`, (err, stdout, stderr) => {
+      if (err) {
+        return res.status(500).json({ success: false, error: stderr || err.message })
+      }
+      res.json({ success: true, message: 'Product import completed!', output: stdout })
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
 
 // =======================
 // IMPORT ORDERS FROM CSV
 // =======================
 
 
-app.post('/api/import-orders', authenticateToken, upload.single('file'), async (req, res) => {
+app.post('/api/import-orders', upload.single('file'), async (req, res) => {
+  
   try {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    // Call your Python script here, e.g.:
+    console.log("🚩 /api/import-orders endpoint hit");
+    const filePath = req.file?.path;
+    console.log("📄 Uploaded file path:", filePath);
+
+    if (!filePath) {
+      console.log("❌ No file uploaded");
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
     const scriptPath = path.join(__dirname, 'create_orders_from_csv.py');
-    const filePath = path.resolve(req.file.path);
-    exec(`python "${scriptPath}" "${filePath}"`, (err, stdout, stderr) => {
-      if (err) {
-        return res.status(500).json({ error: stderr || err.message });
+    console.log("🐍 About to run Python script:", scriptPath);
+
+    exec(
+      `python "${scriptPath}" "${filePath}"`,
+      {
+        env: {
+          ...process.env,
+          SHOP_NAME: process.env.SHOP_NAME,
+          SHOPIFY_ACCESS_TOKEN: process.env.SHOPIFY_ACCESS_TOKEN,
+        }
+      },
+      (err, stdout, stderr) => {
+        console.log("🐍 PYTHON STDOUT:", stdout);
+        console.log("🐍 PYTHON STDERR:", stderr);
+        if (err) {
+          console.error("🐍 PYTHON ERROR:", err);
+          return res.status(500).json({ success: false, error: stderr || err.message });
+        }
+        console.log("✅ Order import completed!");
+        res.json({ success: true, message: 'Order import completed!', output: stdout });
       }
-      res.json({ success: true, message: 'Order import completed!', output: stdout });
-    });
+    );
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Order import failed' });
+    console.error("🚨 JS ERROR:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
-});
+})
 
 // =======================
 // IMPORT SKUS FROM CSV
@@ -370,25 +416,37 @@ app.post('/api/import-orders', authenticateToken, upload.single('file'), async (
 
 
 app.post('/api/import-skus', authenticateToken, upload.single('file'), async (req, res) => {
+  let filePath = req.file ? req.file.path : null;
   try {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const scriptPath = path.join(__dirname, 'update_shopify_inventory.py');
-    const filePath = path.resolve(req.file.path);
-    exec(`python "${scriptPath}" "${filePath}"`, async (err, stdout, stderr) => {
+    if (!filePath) {
+      await sql.connect(sqlConfig)
+    const result = await sql.query`
+        SELECT TOP 1 file_path FROM ImportedFiles WHERE user_id = ${req.user.userId} ORDER BY uploaded_at DESC
+      `
+      filePath = result.recordset[0]?.file_path
+    }
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, error: 'File not found' })
+    }
+    const scriptPath = path.join(__dirname, 'update_shopify_inventory.py')
+    exec(`python "${scriptPath}" "${filePath}"`, (err, stdout, stderr) => {
       if (err) {
-        return res.status(500).json({ error: stderr || err.message });
+        return res.status(500).json({ success: false, error: stderr || err.message })
       }
-      // Optionally delete the file after processing
-      try {
-        await fsp.unlink(filePath);
-      } catch (e) {
-        console.error('Failed to delete file:', filePath, e);
-      }
-      res.json({ success: true, message: 'Update SKUs completed!', output: stdout });
-    });
+      res.json({ success: true, message: 'SKU update completed!', output: stdout })
+    })
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Update SKUs failed' });
+    console.error(err)
+    res.status(500).json({ success: false, error: err.message })
   }
+})
+
+// =======================
+// REQUEST LOGGING (NEW)
+// =======================
+app.use((req, res, next) => {
+  console.log(`➡️  ${req.method} ${req.originalUrl}`);
+  next();
 });
 
 // =======================
