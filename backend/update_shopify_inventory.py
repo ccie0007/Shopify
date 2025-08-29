@@ -2,42 +2,21 @@ import csv
 import sys
 import requests
 from collections import defaultdict
-from ftplib import FTP
 import os
 from dotenv import load_dotenv
-# Load environment variables from .env file
-load_dotenv(dotenv_path="C:\\xampp\\htdocs\\FTPShopify\\ShopifyTech\\.env")
 
-# --- FTP CONFIG ---
-FTP_HOST = os.getenv("FTP_HOST")
-FTP_USER = os.getenv("FTP_USER")
-FTP_PASS = os.getenv("FTP_PASS")
-FTP_CSV_PATH = os.getenv("FTP_CSV_PATH", "/stock_update.csv")
-LOCAL_CSV_PATH = os.getenv("CSV_PATH", "C:\\xampp\\htdocs\\FTPShopify\\ShopifyTech\\backend\\stock_update.csv")  # Local temp file
+# Load environment variables from .env file
+load_dotenv(dotenv_path="C:\\xampp\\htdocs\\FTPShopify\\ShopifyTech\\backend\\.env")
 
 # --- SHOPIFY CONFIG ---
 SHOP_NAME = os.environ.get('SHOP_NAME')
 ACCESS_TOKEN = os.environ.get('SHOPIFY_ACCESS_TOKEN')
-API_VERSION = os.environ.get('SHOPIFY_API_VERSION', '2024-04')  # Use a stable default
+API_VERSION = os.environ.get('SHOPIFY_API_VERSION', '2024-04')
 BASE_URL = f"https://{SHOP_NAME}.myshopify.com/admin/api/{API_VERSION}/"
 HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN,
     "Content-Type": "application/json"
 }
-
-def download_csv_from_ftp():
-    try:
-        print("Connecting to FTP:", FTP_HOST)
-        with FTP(FTP_HOST) as ftp:
-            ftp.login(FTP_USER, FTP_PASS)
-            print("Downloading:", FTP_CSV_PATH, "to", LOCAL_CSV_PATH)
-            with open(LOCAL_CSV_PATH, "wb") as f:
-                ftp.retrbinary(f"RETR {FTP_CSV_PATH}", f.write)
-        print(f"[INFO] Downloaded CSV from FTP to {LOCAL_CSV_PATH}")
-        return LOCAL_CSV_PATH
-    except Exception as e:
-        print(f"[ERROR] FTP download failed: {e}", file=sys.stderr)
-        return None
 
 def shopify_request(method, endpoint, data=None):
     try:
@@ -52,6 +31,8 @@ def shopify_request(method, endpoint, data=None):
         return response.json()
     except requests.RequestException as e:
         print(f"[ERROR] API request failed: {str(e)}", file=sys.stderr)
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"[ERROR] Shopify response: {e.response.text}", file=sys.stderr)
         return None
 
 def aggregate_quantities(csv_path):
@@ -73,59 +54,70 @@ def aggregate_quantities(csv_path):
         return None
 
 def update_inventory(sku_quantities):
-    """Processes aggregated quantities and updates inventory"""
+    """Processes aggregated quantities and updates inventory for ALL variants with the same SKU"""
     success = errors = 0
-    
+
     for sku, total_qty in sku_quantities.items():
         print(f"\nProcessing SKU: {sku} (Total Qty: {total_qty})")
-        
-        # Get inventory item ID
-        item_id = None
-        cursor = None
-        while not item_id:
-            endpoint = 'products.json?limit=250' + (f'&page_info={cursor}' if cursor else '')
+
+        # Find ALL inventory_item_ids for this SKU across all products/pages
+        inventory_item_ids = []
+        endpoint = 'products.json?limit=250'
+        while endpoint:
             data = shopify_request('GET', endpoint)
-            if not data:
+            if not data or not data.get('products'):
                 break
-                
-            # Collect all inventory_item_ids for this SKU
-            item_ids = []
+
             for product in data.get('products', []):
                 for variant in product.get('variants', []):
+                    print(f"[DEBUG] Checking variant SKU: {variant.get('sku')}")
                     if variant.get('sku') == sku:
-                        item_ids.append(variant.get('inventory_item_id'))
+                        inventory_item_ids.append(variant.get('inventory_item_id'))
 
-            # Pagination handling
-            link = data.get('link', {}).get('headers', {}).get('link', '')
-            cursor = link.split('page_info=')[1].split('>')[0] if 'rel="next"' in link else None
-            if not cursor:
-                break
-        
-        if not item_ids:
+            # Handle cursor-based pagination
+            link = None
+            try:
+                link = requests.get(BASE_URL + endpoint, headers=HEADERS).headers.get('Link')
+            except Exception:
+                pass
+            if link and 'rel="next"' in link:
+                import re
+                match = re.search(r'<[^>]+page_info=([^&>]+)[^>]*>; rel="next"', link)
+                if match:
+                    page_info = match.group(1)
+                    endpoint = f'products.json?limit=250&page_info={page_info}'
+                else:
+                    endpoint = None
+            else:
+                endpoint = None
+
+        if not inventory_item_ids:
             print(f"[ERROR] SKU not found: {sku}")
             errors += 1
             continue
 
-        # For each inventory item, update all locations
-        for item_id in item_ids:
+        # For each inventory_item_id, update all locations
+        for item_id in inventory_item_ids:
             locations = shopify_request('GET', f'inventory_levels.json?inventory_item_ids={item_id}')
             if not locations or not locations.get('inventory_levels'):
                 print(f"[ERROR] No locations found for SKU: {sku} (item_id: {item_id})")
                 errors += 1
                 continue
 
-            # Update each location
             for loc in locations['inventory_levels']:
-                if shopify_request('POST', 'inventory_levels/set.json', {
+                payload = {
                     'location_id': loc['location_id'],
                     'inventory_item_id': item_id,
                     'available': total_qty
-                }):
-                    print(f"[SUCCESS] Updated {sku} to {total_qty} at location {loc['location_id']} (item_id: {item_id})")
+                }
+                print("Payload:", payload)
+                result = shopify_request('POST', 'inventory_levels/set.json', payload)
+                if result:
+                    print(f"[SUCCESS] Updated {sku} (item_id: {item_id}) to {total_qty} at location {loc['location_id']}")
                     success += 1
                 else:
                     errors += 1
-    
+
     return success, errors
 
 def main():
