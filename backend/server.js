@@ -58,7 +58,7 @@ app.post('/login', async (req, res) => {
     if (!passwordMatches) return res.status(401).json({ message: 'Invalid username or password' })
 
     const payload = { userId: user.id, username: user.username }
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' })
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '8h' }) // Change '1h' to '8h' or '24h' if you want longer sessions
 
     res.json({ success: true, token })
   } catch (err) {
@@ -320,7 +320,6 @@ app.get('/api/ftp-connections', authenticateToken, async (req, res) => {
 // IMPORT PRODUCTS FROM CSV
 // =======================
 
-
 app.post('/api/import-products', authenticateToken, upload.single('file'), async (req, res) => {
   console.log("🚩 /api/import-products endpoint hit");
   console.log("📄 Uploaded file:", req.file);
@@ -351,7 +350,6 @@ app.post('/api/import-products', authenticateToken, upload.single('file'), async
 // IMPORT ORDERS FROM CSV
 // =======================
 
-
 app.post('/api/import-orders', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -373,7 +371,6 @@ app.post('/api/import-orders', authenticateToken, upload.single('file'), async (
 // IMPORT SKUS FROM CSV
 // =======================
 
-
 app.post('/api/import-skus', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -394,6 +391,56 @@ app.post('/api/import-skus', authenticateToken, upload.single('file'), async (re
   } catch (err) {
     res.status(500).json({ error: err.message || 'Update SKUs failed' });
   }
+});
+
+// =======================
+// IMPORT SKUS BY PATH
+// =======================
+
+app.post('/api/import-skus-by-path', authenticateToken, async (req, res) => {
+  const { filePath } = req.body;
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(400).json({ error: 'File not found' });
+  }
+  const scriptPath = path.join(__dirname, 'update_shopify_inventory.py');
+  exec(`python "${scriptPath}" "${filePath}"`, async (err, stdout, stderr) => {
+    if (err) {
+      return res.status(500).json({ error: stderr || err.message });
+    }
+    try { await fsp.unlink(filePath); } catch (e) {}
+    res.json({ success: true, message: 'Update SKUs completed!', output: stdout });
+  });
+});
+
+// =======================
+// TRACKING IMPORT
+// =======================
+
+app.post('/api/import-tracking', upload.single('file'), (req, res) => {
+  const filePath = path.resolve(req.file.path);
+  const scriptPath = path.join(__dirname, 'update_tracking.py');
+  exec(`python "${scriptPath}" "${filePath}"`, (error, stdout, stderr) => {
+    if (error) {
+      return res.status(500).json({ error: stderr || error.message });
+    }
+    // Only send the summary (last non-empty line)
+    const lines = stdout.trim().split('\n');
+    const summary = lines.reverse().find(line => line.trim().length > 0) || 'Tracking update completed!';
+    res.json({ message: summary });
+  });
+});
+
+// =======================
+// GET TRACKING LOG
+// =======================
+
+app.get('/api/tracking-log', authenticateToken, (req, res) => {
+  const logPath = path.join(__dirname, 'tracking_update.log');
+  if (!fs.existsSync(logPath)) return res.status(404).json({ error: 'Log not found' });
+  fs.readFile(logPath, 'utf8', (err, data) => {
+    if (err) return res.status(500).json({ error: 'Failed to read log' });
+    res.json({ log: data });
+  });
 });
 
 // =======================

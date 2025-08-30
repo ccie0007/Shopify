@@ -1,0 +1,9 @@
+{
+    "fulfillment": {
+        "tracking_info": {
+            "number": "TRACK123456789",
+            "company": "UPS"
+        },
+        "notify_customer": true
+    }
+}
