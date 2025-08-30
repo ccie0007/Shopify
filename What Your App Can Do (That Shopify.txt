@@ -1,0 +1,30 @@
+ What Your App Can Do (That Shopify Native Import Can’t):
+Automate Imports
+
+Schedule imports (e.g., nightly, hourly).
+Trigger imports from FTP, email, or API—no manual upload needed.
+Custom CSV Formats
+
+Accept any column names or structure (not just Shopify’s strict format).
+Map columns flexibly (e.g., handle supplier files with different headers).
+Advanced Logic
+
+Update only certain fields (e.g., just price or just inventory).
+Apply business rules (e.g., don’t allow price drops below cost).
+Merge, aggregate, or transform data before import.
+Integrations
+
+Connect with other systems (ERP, WMS, suppliers).
+Send notifications, logs, or reports after import.
+Bulk Actions & Error Handling
+
+Show detailed error messages for each row.
+Retry failed imports automatically.
+Rollback on failure.
+User Permissions & Audit
+
+Track who imported what, and when.
+Restrict import actions by user role.
+API Access
+
+Allow other apps or partners to trigger imports via API.

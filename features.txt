@@ -1,0 +1,91 @@
+ChatGPT said:
+
+Alright — here’s a cheat sheet of industry-standard CSV automation features you can safely use without worrying you’re “copying” EasyCSV.
+These are common in ETL tools, Shopify import/export apps, and automation platforms — so they’re fair game.
+
+1. Data Input Sources (Common)
+
+Upload via browser (manual CSV/Excel files)
+
+Google Sheets import
+
+Email attachment ingestion
+
+FTP/SFTP server downloads
+
+Pull from a public/private API endpoint
+
+Dropbox / Google Drive / OneDrive imports
+
+2. Data Output Destinations (Common)
+
+Shopify product, order, customer updates
+
+Google Sheets export
+
+FTP/SFTP upload
+
+Email with CSV attachment
+
+Direct API push to a target system
+
+3. Automation & Scheduling (Common)
+
+Run every X hours/days
+
+Trigger on file arrival in a folder or email inbox
+
+Cron job–style custom schedules
+
+Conditional execution (run only if file changes)
+
+4. Data Mapping & Transformation (Common)
+
+Map CSV columns to destination fields
+
+Merge multiple CSVs
+
+Split a CSV by row conditions
+
+Format dates, numbers, currency
+
+Add static columns (e.g., "Vendor: MyCompany")
+
+Remove columns or rows
+
+Replace text values (find/replace)
+
+5. Filtering & Validation (Common)
+
+Skip rows that don’t meet a condition (e.g., stock > 0)
+
+Validate data format before upload (e.g., valid SKU, correct price format)
+
+Reject job if required fields are missing
+
+6. User Experience Enhancements (Common)
+
+Preview results before running
+
+Job logs & history
+
+Error notifications by email
+
+Role-based access for team members
+
+Template-based setups for specific platforms (Shopify, WooCommerce, etc.)
+
+💡 Where you can innovate to stand out:
+
+AI-powered column mapping (auto-match columns by name and data type)
+
+Mobile-friendly dashboard (most automation tools ignore mobile)
+
+Visual transformation editor (drag-and-drop steps instead of forms)
+
+One-click multi-store updates (update multiple Shopify stores from one CSV)
+
+Real-time sync with Google Sheets (instant push on edit)
+
+If you want, I can take these and build you a “core + advanced + differentiator” feature roadmap so you know exactly what to launch first, and what to add later to surpass EasyCSV.
+Want me to make that?

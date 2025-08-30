@@ -1,0 +1,35 @@
+
+Great question!
+If users can already create new products using Shopify’s native CSV import, why build this feature in your app?
+
+Why build product creation in your app?
+Shopify Native Import:
+
+Manual: User must log in, upload the file, and wait for processing.
+Strict format: Must match Shopify’s CSV exactly.
+No automation: Can’t schedule or trigger automatically.
+No custom logic: Can’t validate, transform, or enrich data.
+No integrations: Can’t pull from FTP, email, or other systems.
+No feedback: Limited error reporting, no custom notifications.
+Your App:
+
+Automation: Schedule imports, trigger from FTP/email/API, or run on a timer.
+Custom CSV formats: Accept supplier/customer files, map columns as needed.
+Custom logic: Validate data, enrich with extra info, auto-tag, set metafields, etc.
+Integrations: Connect with ERPs, WMS, suppliers, or other business systems.
+User experience: Show progress, detailed errors, logs, and notifications.
+Permissions & audit: Track who imported what, when, and how.
+Bulk actions: Combine product creation with inventory, price, or image updates in one workflow.
+Summary Table
+Feature	Shopify Native Import	Your App
+Manual upload only	✅	✅
+Automated/scheduled import	❌	✅
+Custom CSV formats	❌	✅
+Custom business logic	❌	✅
+Integrate with FTP/email/API	❌	✅
+Detailed error handling	❌	✅
+User/audit tracking	❌	✅
+In short:
+Your app adds automation, flexibility, integrations, and a better user experience—things Shopify’s native import can’t do.
+
+Let me know if you want examples of custom logic or integrations you could add!

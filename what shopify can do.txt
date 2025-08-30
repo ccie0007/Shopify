@@ -1,0 +1,21 @@
+Shopify native CSV import (the built-in Products import in the Shopify admin) cannot update tracking numbers or fulfillment status.
+
+What Shopify Native Import Can Do:
+Create or update products and variants (title, price, inventory, etc.)
+Update inventory quantity and price
+Update product details
+What Shopify Native Import Cannot Do:
+Cannot update order tracking numbers
+Cannot mark orders as fulfilled
+Cannot update fulfillment status
+How to Update Tracking in Shopify:
+To update tracking numbers and fulfillment status, you must:
+
+Use the Shopify Admin (manually update each order)
+Or use the Shopify API (programmatically update orders/fulfillments)
+Or use an app (like yours!) that processes a CSV and calls the Shopify API to update tracking
+Summary:
+
+Shopify native import: No tracking/fulfillment updates.
+Your app: Can support CSV-based tracking updates via the Shopify API.
+Let me know if you want a sampl

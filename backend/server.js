@@ -13,7 +13,10 @@ const fsp = require('fs').promises
 
 const app = express()
 app.use(express.json())
-app.use(cors())
+app.use(cors({
+  origin: 'http://localhost:3000', // or whatever port your React app runs on
+  credentials: true
+}))
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here'
 
