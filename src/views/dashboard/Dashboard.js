@@ -37,6 +37,8 @@ const Dashboard = () => {
   const [showConfetti, setShowConfetti] = useState(false)
   const [width, height] = useWindowSize()
   const [status, setStatus] = useState('idle'); // 'idle' | 'processing' | 'success' | 'error'
+  const [showDetails, setShowDetails] = useState(false);
+  const [detailsLog, setDetailsLog] = useState('');
 
   // Extract userId from JWT token
   const getUserIdFromToken = () => {
@@ -326,6 +328,21 @@ const Dashboard = () => {
     }
   };
 
+  const fetchDetailsLog = async () => {
+    setShowDetails(true);
+    setDetailsLog('Loading...');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://127.0.0.1:5000/api/tracking-log', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setDetailsLog(data.log || 'No details found.');
+    } catch {
+      setDetailsLog('Failed to load details.');
+    }
+  };
+
   return (
     <div>
       {/* Import Actions Table */}
@@ -348,6 +365,9 @@ const Dashboard = () => {
                     {message && (
                       <CAlert color="success" className="mb-0 py-2 px-3" style={{ display: 'inline-block', marginBottom: 0 }}>
                         {message}
+                        <CButton color="link" size="sm" style={{ marginLeft: 10 }} onClick={fetchDetailsLog}>
+                          Details
+                        </CButton>
                       </CAlert>
                     )}
                     {error && (
@@ -366,6 +386,7 @@ const Dashboard = () => {
                 runNow={runNow}
                 duplicateAction={duplicateAction}
                 deleteAction={deleteAction}
+                onViewDetails={fetchDetailsLog} // <-- Add this line
               />
 
               {/* Status/Progress indication */}
@@ -425,6 +446,18 @@ const Dashboard = () => {
 
       {/* Confetti explosion on successful action (e.g., after creating an import action) */}
       {showConfetti && <Confetti width={width} height={height} />}
+
+
+      {/* Tracking Import Details Modal */}
+      <CModal visible={showDetails} onClose={() => setShowDetails(false)}>
+        <CModalHeader>Tracking Import Details</CModalHeader>
+        <CModalBody>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{detailsLog}</pre>
+          <CButton color="secondary" onClick={() => setShowDetails(false)} style={{ marginTop: 10 }}>
+            Close
+          </CButton>
+        </CModalBody>
+      </CModal>
     </div>
   )
 }
